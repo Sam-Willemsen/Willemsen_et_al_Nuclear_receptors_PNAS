@@ -6,7 +6,7 @@ COMPs <- c("Calcitriol","Clofibricacid", "FICZ", "GW3965", "GW4064", "SR12813")
 NRs <- c("VDRa","PPARa","AHRa", "LXRa", "FXRa", "PXRa")
 TV <- as.data.frame(cbind(COMPs, NRs))
 
-countdata <- read.csv("J:/NR project/NR R analysis for paper/N39_JBJPFYY_bulkRNAseq_NR_countdata.csv", row.names = 1)
+countdata <- read.csv("J:/NR project/NR R analysis for paper/N39_JBJPFYY_bulkRNAseq_NR_countdata.csv", row.names = 1) #raw count data
 coldata <- read.csv("J:/NR project/NR R analysis for paper/N39_JBJPFYY_bulkRNAseq_NR_coldata.csv")
 
 
