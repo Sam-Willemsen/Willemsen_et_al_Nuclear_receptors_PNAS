@@ -477,7 +477,7 @@ ppar_ <- read.csv("clustergenes.12.csv")
 ahr_ppar <- rbind(ahr_,ppar_)
 write.csv(ahr_ppar, "ahr_ppar.csv")
 
-fxr_1 <- read.csv("clustergenes.9.csv")
+fxr_1 <- read.csv("clustergenes.10.csv")
 fxr_2 <- read.csv("clustergenes.13.csv")
 fxr_ <- rbind(fxr_1,fxr_2)
 write.csv(fxr_, "fxr.csv")
