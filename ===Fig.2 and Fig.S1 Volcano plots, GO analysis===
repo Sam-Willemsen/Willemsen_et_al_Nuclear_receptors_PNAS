@@ -1,0 +1,193 @@
+===Fig.2 and Fig.S1 Volcano plots===
+```{r,eval=FALSE, include=FALSE, fig.height=10}
+COMPs <- c("Calcitriol","Clofibricacid", "FICZ", "GW3965", "GW4064", "SR12813")
+NRs <- c("VDRa","PPARa","AHRa", "LXRa", "FXRa", "PXRa")
+TV <- as.data.frame(cbind(COMPs, NRs))
+for (i in COMPs) {
+
+TV$lim <- c(110,60,70,110,90,70)
+
+condition = i
+NR <- TV$NRs[TV$COMPs==condition]
+pvalMAX <- TV$lim[TV$COMPs==condition]
+
+#load in data to use
+resV <- read.csv(paste(condition,"_res.csv ", sep=""), row.names=1)
+resV$pvalue <- resV$padj # replace pvalue with padj, workaround for enhancedvolcano function 
+
+#prepare new object to use for volcano plot
+cutoff <- 10^-pvalMAX
+
+
+#select top differentially expressed up and down, while highlighting biggest FC, for labeling
+
+  ssup <- subset(resV ,log2FoldChange > 1)          # SubSet upregulated genes 
+  ssup <- subset(ssup, pvalue < 0.05)               # keep only significant genes
+  top.up <- c()                                     # create empty vector for gene names
+    
+  for (i in 1:5){                                  # loop to select top 20 genes firstly on pvalue then on FC alternating
+    ssup <- ssup[order(ssup$pvalue),]               # sort based on pvalue
+  newvec <- c(rownames(ssup[1,]))                   # grab gene with lowest pvalue
+  top.up <- c(top.up,newvec)                        # add genename to vector 
+    ssup <- ssup[-1,]                               # remove gene to avoid duplicates
+    ssup <- ssup[order(-ssup$log2FoldChange),]      # sort based on FC
+  newvec <- c(rownames(ssup[1,]))                   # grab gene with highest FC
+  top.up <- c(top.up,newvec)                        # remove gene to avoid duplicates
+    ssup <- ssup[-1,]                               # add genename to vector
+  }
+
+  ssdown <- subset(resV ,log2FoldChange < -1)        # SubSet downregulated genes 
+  ssdown <- subset(ssdown, pvalue < 0.05)           # keep only significant genes
+  top.down <- c()                                   # create empty vector for gene names
+    
+  for (i in 1:5){                                  # loop to select top 20 genes firstly on pvalue then on FC alternating
+    ssdown <- ssdown[order(ssdown$pvalue),]         # sort based on pvalue
+  newvec <- c(rownames(ssdown[1,]))                 # grab gene with lowest pvalue
+  top.down <- c(top.down,newvec)                    # add genename to vector 
+    ssdown <- ssdown[-1,]                           # remove gene to avoid duplicates
+    ssdown <- ssdown[order(ssdown$log2FoldChange),] # sort based on (negative)FC
+  newvec <- c(rownames(ssdown[1,]))                 # grab gene with highest FC
+  top.down <- c(top.down,newvec)                    # remove gene to avoid duplicates
+    ssdown <- ssdown[-1,]                           # add genename to vector
+  }    
+ 
+  labels <- c(top.up, top.down) # combine labes for up and down regulated genes
+
+# identify genes that are over pvalue threshold and thus will be plotted with pointing arrow
+ up <- rownames(subset(resV, pvalue < cutoff))
+# change the pvalue of those over the threshold so they fit on the graph
+ resV$pvalue[resV$pvalue < cutoff] <- 10^-pvalMAX
+ 
+# custom shapes/ sizes for the points
+  customshape <- rep(19, nrow(resV))
+  names(customshape) <- rep('group1', nrow(resV))
+  customshape[which(rownames(resV) %in% up)] <- 17
+  names(customshape)[which(rownames(resV) %in% up)] <- 'group2'
+
+  customsize <- rep(4.5, nrow(resV))
+  customsize [which(rownames(resV) %in% up)] <- 6
+  
+ 
+#setting the colours
+  keyvals <- ifelse(
+    resV$log2FoldChange > 1, '#B2182B',
+      ifelse(resV$log2FoldChange < -1, '#2166AC',
+        'grey'))
+  keyvals[is.na(keyvals)] <- 'grey'
+  names(keyvals)[keyvals == 'grey'] <- ''
+  names(keyvals)[keyvals == '#2166AC'] <- 'Downregulated'
+  names(keyvals)[keyvals == '#B2182B'] <- 'Upregulated'
+
+  
+ggsave(filename = paste0(NR,'.pdf'),  
+       
+    EnhancedVolcano(resV,
+    lab = rownames(resV),
+    x = 'log2FoldChange',
+    y = 'pvalue',
+    pCutoff = 0.05,
+    ylab = bquote(~-Log[10]~italic(Padj)),
+    colCustom = keyvals,
+    colAlpha = 0.5,
+    shapeCustom = customshape,
+    pointSize = customsize,
+    drawConnectors = TRUE,
+    maxoverlapsConnectors = 50,
+    widthConnectors = 0.8,
+    arrowheads = FALSE,
+    typeConnectors = 'open',
+    legendPosition = 'none',
+    selectLab =labels,
+    labSize = 5,
+    gridlines.minor = FALSE,
+    title= paste(NR), subtitle = paste0(nrow(resV[resV$pvalue < 0.05,]), ' differentially expressed genes')
+    )+
+      ggplot2::coord_cartesian(xlim=c(-10,10)) +
+      ggplot2::scale_x_continuous(
+      breaks=seq(-10,10,1))
+    + ggplot2::coord_cartesian(ylim=c(-1, pvalMAX)) +
+      ggplot2::scale_y_continuous(
+      breaks=seq(-0,pvalMAX,20))
+)
+}
+```
+
+===Fig. 2 and Fig. S1 GO term analysis===
+```{r}
+#BiocManager::install("viridis")
+
+library(clusterProfiler)
+library(org.Hs.eg.db)
+library(viridis)
+library(ggplot2)
+```
+
+---Creating gene lists---
+```{r} 
+for (i in COMPs) {
+
+condition = i
+res <- read.csv(paste0(condition,"_res.csv"), header = T)
+FC = 1
+PADJ = 0.05
+up <- res[res$log2FoldChange > FC,]
+sigup <- up[up$padj < PADJ,]
+down <- res[res$log2FoldChange < -FC,]
+sigdown <-down[down$padj < PADJ,]
+sigup <- na.omit(sigup)
+sigdown <- na.omit(sigdown)
+row.names(sigup) <- gsub("__chr.+", "", row.names(sigup)) #removes __chrxx for easier handling
+row.names(sigdown) <- gsub("__chr.+", "", row.names(sigdown)) #removes __chrxx for easier handling
+write.csv(sigdown[,1], paste0(condition,"_",PADJ,"_GOdownFC",FC,".csv"), row.names = F, quote=F)
+write.csv(sigup[,1], paste0(condition,"_",PADJ,"_GOupFC",FC,".csv"), row.names = F, quote=F)
+}
+```
+
+---GO analysis---
+```{r}
+#IMPORTANT: the loop breaks at clofibricacid because there are no significantly downregulated GO term, subset the COMPs vector and continue the loop with COMPs2 instead of COMPs
+COMPs2 <- COMPs[3:6]
+
+for (i in COMPs) { #change COMPs to COMPs2 here to rerun the loop with the remainder of the conditions
+  
+#Define input
+condition = i
+NR <- TV$NRs[TV$COMPs==condition]
+FC = 1
+PADJ = 0.05
+simply = 0.8
+
+DGOup <- read.csv(paste0(condition,"_",PADJ,"_GOupFC",FC,".csv"))
+DGOdown <- read.csv(paste0(condition,"_",PADJ,"_GOdownFC",FC,".csv"))
+
+#up
+geneList <- DGOup$x
+#GO classification
+ggoup <-  enrichGO(gene     = geneList,
+               OrgDb    = org.Hs.eg.db,
+               keyType  = "SYMBOL",
+               ont      = "BP", #BP = biological pathways
+               pAdjustMethod = "bonferroni")
+  
+ggoup2<- simplify(ggoup, cutoff=simply, by="p.adjust", select_fun=min)
+  plotup <- dotplot(ggoup2, showCategory=20, font.size=11, label_format = 40) + ggtitle(paste0("Upregulated enriched GO terms")) + scale_color_viridis_c(name = 'p.adjust', direction = -1) +  theme(plot.title = element_text(hjust = 0.9))
+ggsave(filename = paste0("GO_",condition,"FC",FC,"P",PADJ,"simply",simply,"_up.pdf"), plotup, width = 15, height = 17.5, units = "cm")
+GOinfoUP <- plotup$data[c("Description","GeneRatio","p.adjust", "ID", "Count", "geneID" )]
+write.csv(GOinfoUP, paste0('GOtable_',condition,'_UP.csv'))
+
+#down
+geneList <- DGOdown$x
+#GO classification
+ggodown <-  enrichGO(gene     = geneList,
+               OrgDb    = org.Hs.eg.db,
+               keyType  = "SYMBOL",
+               ont      = "BP", #BP = biological pathways
+               pAdjustMethod = "bonferroni")
+
+ggodown2<- simplify(ggodown, cutoff=simply, by="p.adjust", select_fun=min)
+  plotdown <- dotplot(ggodown, showCategory=20, font.size=11, label_format = 35) + ggtitle(paste0("Downregulated enriched GO terms")) + scale_color_viridis_c(name = 'p.adjust', direction = -1) +  theme(plot.title = element_text(hjust = 0.5))
+  ggsave(filename = paste0("GO_",condition,"FC",FC,"P",PADJ,"simply",simply,"_down.pdf"), plotdown, width = 15, height = 17.5, units = "cm")
+GOinfoDOWN <- plotdown$data[c("Description","GeneRatio","p.adjust", "ID", "Count", "geneID" )]
+write.csv(GOinfoDOWN, paste0('GOtable_',condition,'_DOWN.csv'))
+}
+```
