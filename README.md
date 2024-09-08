@@ -1,4 +1,5 @@
 # Willemsen_et_al_Nuclear_receptors_PNAS_2024
 
-Please run ===DESEQ analysis=== first before running any other scripts to avoid errors.  
-Other scripts for the analyses and figures depend on the DESEQ2 results created and saved as .csv, from Script#1 ===DESEQ analysis===
+All scripts are in R Markdown format.
+Scripts use raw countdata and coldata that can be found in Gene Expression Omnibus (GEO) under accession number is GSE273646.
+
