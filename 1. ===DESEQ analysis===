@@ -1,0 +1,68 @@
+--loading data and libraries---
+```{r, message=FALSE}
+
+#Translation vector
+COMPs <- c("Calcitriol","Clofibricacid", "FICZ", "GW3965", "GW4064", "SR12813")
+NRs <- c("VDRa","PPARa","AHRa", "LXRa", "FXRa", "PXRa")
+TV <- as.data.frame(cbind(COMPs, NRs))
+
+countdata <- read.csv("J:/NR project/NR R analysis for paper/N39_JBJPFYY_bulkRNAseq_NR_countdata.csv", row.names = 1)
+coldata <- read.csv("J:/NR project/NR R analysis for paper/N39_JBJPFYY_bulkRNAseq_NR_coldata.csv")
+
+
+library(EnhancedVolcano)
+library(gridExtra)
+library(grid)
+library(DESeq2)
+library(ggplot2)
+library(RColorBrewer)
+
+
+```
+
+
+---DESEQ analysis---
+```{r, message=FALSE} 
+
+
+for (i in COMPs) {
+
+compound = i
+
+
+#create DESeq dataset
+design = ~ Condition
+coldata1 <- coldata[coldata$Condition == "BMP" | coldata$Condition == compound,]
+coldata1$Condition = as.factor(coldata1$Condition)
+
+
+dds <- DESeqDataSetFromMatrix(countData = countdata[,coldata$Condition == "BMP" | coldata$Condition == compound,],
+                                  colData   = coldata1,
+                                  design    = design)
+
+dds <- dds[rowSums(assay(dds)) > 10,] # removes genes with < 10 total reads across all conditions
+
+#View(assay(dds))
+#dim(assay(dds))
+dds$Condition = relevel(dds$Condition, "BMP")
+dds$Condition
+
+# And we perform the DEA using DESeq2 and store the results in res
+res <- as.data.frame(results(DESeq(dds)))
+res <- res[order(res$pvalue, res$padj),]
+row.names(res) <- gsub("__chr.+", "", row.names(res)) #removes __chrxx for easier handling
+
+res <- res[res$baseMean >= 50,]
+  res_selectlog2FC1 <- res[res$padj <= 0.05 & res$baseMean >= 50  & res$log2FoldChange >= 1 | res$padj <= 0.05 & res$baseMean >= 50  & res$log2FoldChange <= -1,]
+   res_selectlog2FC2 <- res[res$padj <= 0.05 & res$baseMean >= 50  & res$log2FoldChange >= 2 | res$padj <= 0.05 & res$baseMean >= 50  & res$log2FoldChange <= -2,]
+dim(res)
+  dim(res_selectlog2FC1)
+    dim(res_selectlog2FC2)
+
+#Write this gene selections to a csv file.
+write.csv(res, file = paste(compound, "_res.csv", sep=""))
+  write.csv(res_selectlog2FC1, file = paste(compound, "_res_log2FC1.csv", sep=""))
+    write.csv(res_selectlog2FC2, file = paste(compound, "_res_log2FC2.csv", sep=""))         
+}
+
+```
