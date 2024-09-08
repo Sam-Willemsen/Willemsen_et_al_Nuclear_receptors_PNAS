@@ -1,0 +1,371 @@
+===Fig. 3: heatmaps of intestinal functions===
+```{r}
+library(Seurat)
+library(SeuratDisk)
+library(DESeq2)
+library(pheatmap)
+
+countdata <- read.csv("J:/NR project/NR R analysis for paper/N39_JBJPFYY_bulkRNAseq_NR_countdata.csv", row.names = 1)
+coldata <- read.csv("J:/NR project/NR R analysis for paper/N39_JBJPFYY_bulkRNAseq_NR_coldata.csv")
+
+
+DESeq.ds <- DESeqDataSetFromMatrix(countData = countdata,
+colData = coldata,
+design = ~ Condition)
+
+dds <- DESeq.ds[rowSums(assay(DESeq.ds)) > 10,]
+
+
+
+#DESEQ normalisation
+dds <- estimateSizeFactors(dds) # calculate SFs, add them to object
+counts_norm <- counts(dds, normalized=TRUE)
+
+#evaluation of the best normalisation for further analysis
+par(mfrow = c(1,3))
+boxplot(log2(countdata), main = 'just countdata')
+boxplot(log2(counts(dds)), main = 'countdata after rowsum 10 filter')
+boxplot(log2(counts_norm), main = 'countdata after dds norm')
+
+```
+
+
+```{r}
+version <- "_DESEQnorm"
+# prepare countdata for heatmap
+rownames(counts_norm) <- gsub("__chr.+", "", rownames(counts_norm)) #removes __chrxx
+colnames(countdata) <- gsub("_a", "_1", colnames(countdata)) #replace _a and _b with 1 and 2
+counts_norm[counts_norm ==0] <- 1 #change 0 to 1 to prevent inf errors
+counts_norm_log <- log2(counts_norm) # log transform
+
+
+
+#selection of genes
+
+#----------------------------------lipids--------
+#https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4265799/
+
+x <- c("APOA1", "APOA4","APOB", "APOC3", "APOE", "MTTP", "CD36", "FABP1", "FABP2", "PLIN2", "ABCG1", "ABCG4", "ABCG5", "ABCG8", "ABCA1", "NPC1L1", "MGAT1", "MGAT2", "MGAT3", "DGAT1", "DGAT2",  "ACAT1", "ACAT2", "SREBF2", "SCD", "SCD5") 
+gaps <-c(10,16)
+name <- 'Lipid_absorption'
+
+
+selectcd.log <- as.data.frame(counts_norm_log [c(x),])
+
+#colnames 
+colnames(selectcd.log) <- c("BMP1", "BMP2", "VDR1", "VDR2", "LXR1", "LXR2", "FXR1", "FXR2", "PXR1", "PXR2", "PPAR1", "PPAR2", "AHR1", "AHR2")
+
+#LOG FC vs BMP
+selectcd.log["VDR1"] <- selectcd.log["VDR1"]-selectcd.log["BMP1"]
+selectcd.log["VDR2"] <- selectcd.log["VDR2"]-selectcd.log["BMP2"]
+
+selectcd.log["LXR1"] <- selectcd.log["LXR1"]-selectcd.log["BMP1"]
+selectcd.log["LXR2"] <- selectcd.log["LXR2"]-selectcd.log["BMP2"]
+
+selectcd.log["FXR1"] <- selectcd.log["FXR1"]-selectcd.log["BMP1"]
+selectcd.log["FXR2"] <- selectcd.log["FXR2"]-selectcd.log["BMP2"]
+
+selectcd.log["PXR1"] <- selectcd.log["PXR1"]-selectcd.log["BMP1"]
+selectcd.log["PXR2"] <- selectcd.log["PXR2"]-selectcd.log["BMP2"]
+
+selectcd.log["PPAR1"] <- selectcd.log["PPAR1"]-selectcd.log["BMP1"]
+selectcd.log["PPAR2"] <- selectcd.log["PPAR2"]-selectcd.log["BMP2"]
+
+selectcd.log["AHR1"] <- selectcd.log["AHR1"]-selectcd.log["BMP1"]
+selectcd.log["AHR2"] <- selectcd.log["AHR2"]-selectcd.log["BMP2"]
+
+
+#take mean FCvsBMP of each duplicate
+VDR<- (selectcd.log[,"VDR1"]+selectcd.log[,"VDR2"]) /2
+LXR<- (selectcd.log[,"LXR1"]+selectcd.log[,"LXR2"]) /2
+FXR<- (selectcd.log[,"FXR1"]+selectcd.log[,"FXR2"]) /2
+PXR<- (selectcd.log[,"PXR1"]+selectcd.log[,"PXR2"]) /2
+PPAR<- (selectcd.log[,"PPAR1"]+selectcd.log[,"PPAR2"]) /2
+AHR<- (selectcd.log[,"AHR1"]+selectcd.log[,"AHR2"]) /2
+
+
+df <-cbind(VDR, LXR, FXR, PXR, PPAR, AHR)
+row.names(df) <-row.names(selectcd.log)
+# create heatmap using pheatmap
+
+   #function to mirror order of clusters; purely visual
+   callback = function(hc, mat){
+    sv = svd(t(mat))$v[,1]
+    dend = reorder(as.dendrogram(hc), wts = sv)
+    as.hclust(dend)
+} 
+    
+
+paletteLength <- 50
+myColor <- colorRampPalette(c("#2166AC", "white", "#B2182B"))(paletteLength)
+# length(breaks) == length(paletteLength) + 1
+# use floor and ceiling to deal with even/odd length pallettelengths
+myBreaks <- c(seq(min(df), 0, length.out=ceiling(paletteLength/2) + 1), 
+              seq(max(df)/paletteLength, max(df), length.out=floor(paletteLength/2)))
+
+hm <- pheatmap(mat = df, cluster_cols = TRUE, length.out = 99, cluster_rows = FALSE, cellheight= 14, cellwidth = 23, color =myColor,callback =callback, breaks = myBreaks,treeheight_col = 15,  main = name, filename = paste0(name,version,".pdf")   , gaps_row = gaps)
+
+
+
+# --------------------------------------------------electrolyte transporter--------------------------------
+#https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4427515/
+#Calcium-Independent Effects in Mouse Intestine and Human Enteroids
+
+x <- c("CFTR","SLC26A3", "SLC26A6", "SCNN1A", "SLC9A2","SLC9A3","SLC9A3R1", "SLC9A3R2", "SLC34A2", "SLC34A3", "SLC20A1", "SLC20A2", "SLC17A4","TRPV6", "CALB2", "ATP2B1", "ATP2B4", "SLC7A1", "HFE", "ATP7A", "SLC30A4", "SLC30A5", "SLC30A10", "SLC11A2", "TRPM7")
+gaps <- c(3,8,13,18)
+name <- "Electrolyte_balance"
+
+selectcd.log <- as.data.frame(counts_norm_log [c(x),])
+
+
+#colnames 
+colnames(selectcd.log) <- c("BMP1", "BMP2", "VDR1", "VDR2", "LXR1", "LXR2", "FXR1", "FXR2", "PXR1", "PXR2", "PPAR1", "PPAR2", "AHR1", "AHR2")
+
+#LOG FC vs BMP
+selectcd.log["VDR1"] <- selectcd.log["VDR1"]-selectcd.log["BMP1"]
+selectcd.log["VDR2"] <- selectcd.log["VDR2"]-selectcd.log["BMP2"]
+
+selectcd.log["LXR1"] <- selectcd.log["LXR1"]-selectcd.log["BMP1"]
+selectcd.log["LXR2"] <- selectcd.log["LXR2"]-selectcd.log["BMP2"]
+
+selectcd.log["FXR1"] <- selectcd.log["FXR1"]-selectcd.log["BMP1"]
+selectcd.log["FXR2"] <- selectcd.log["FXR2"]-selectcd.log["BMP2"]
+
+selectcd.log["PXR1"] <- selectcd.log["PXR1"]-selectcd.log["BMP1"]
+selectcd.log["PXR2"] <- selectcd.log["PXR2"]-selectcd.log["BMP2"]
+
+selectcd.log["PPAR1"] <- selectcd.log["PPAR1"]-selectcd.log["BMP1"]
+selectcd.log["PPAR2"] <- selectcd.log["PPAR2"]-selectcd.log["BMP2"]
+
+selectcd.log["AHR1"] <- selectcd.log["AHR1"]-selectcd.log["BMP1"]
+selectcd.log["AHR2"] <- selectcd.log["AHR2"]-selectcd.log["BMP2"]
+
+
+#take mean FCvsBMP of each duplicate
+VDR<- (selectcd.log[,"VDR1"]+selectcd.log[,"VDR2"]) /2
+LXR<- (selectcd.log[,"LXR1"]+selectcd.log[,"LXR2"]) /2
+FXR<- (selectcd.log[,"FXR1"]+selectcd.log[,"FXR2"]) /2
+PXR<- (selectcd.log[,"PXR1"]+selectcd.log[,"PXR2"]) /2
+PPAR<- (selectcd.log[,"PPAR1"]+selectcd.log[,"PPAR2"]) /2
+AHR<- (selectcd.log[,"AHR1"]+selectcd.log[,"AHR2"]) /2
+
+
+df <-cbind(VDR, LXR, FXR, PXR, PPAR, AHR)
+row.names(df) <-row.names(selectcd.log)
+# create heatmap using pheatmap
+   #function to mirror order of clusters; purely visual
+   callback = function(hc, mat){
+    sv = svd(t(mat))$v[,1]
+    dend = reorder(as.dendrogram(hc), wts = sv)
+    as.hclust(dend)
+} 
+    
+
+paletteLength <- 50
+myColor <- colorRampPalette(c("#2166AC", "white", "#B2182B"))(paletteLength)
+# length(breaks) == length(paletteLength) + 1
+# use floor and ceiling to deal with even/odd length pallettelengths
+myBreaks <- c(seq(min(df), 0, length.out=ceiling(paletteLength/2) + 1), 
+              seq(max(df)/paletteLength, max(df), length.out=floor(paletteLength/2)))
+
+hm <- pheatmap(mat = df, cluster_cols = TRUE, length.out = 99, cluster_rows = FALSE, cellheight= 14, cellwidth = 23, color =myColor,callback =callback, breaks = myBreaks,treeheight_col = 15,  main = name, filename = paste0(name,version,".pdf")   , gaps_row = gaps)
+
+
+# -----------------------------drug metabolism------------------------------
+#source https://www-sciencedirect-com.proxy.library.uu.nl/science/article/pii/S0169409X12003031?via%3Dihub
+#https://pubmed.ncbi.nlm.nih.gov/30253071/, https://www.ncbi.nlm.nih.gov/pmc/articles/PMC6225997/
+#Analysis of 1,25-Dihydroxyvitamin D3 Genomic Action Reveals Calcium-Regulating and 
+#https://www.ncbi.nlm.nih.gov/pmc/articles/PMC3777468/ FOR ABCC GENES
+
+x <- c("CYP1A1", "CYP1B1", "CYP2B6", "CYP2C8", "CYP2C9", "CYP2C19", "CYP3A4", "CYP3A5", "FMO4","FMO5", "UGT2B7","UGT2B15","GSTA1","GSTP1", "GSTZ1", "SLC15A1", "SLC22A1", "ABCB1", "ABCG2", "ABCC1", "ABCC2", "ABCC3", "ABCC4", "ABCC5", "ABCC10")
+gaps <- c(10,15)
+name <- "Xenobiotic_metabolism"
+
+
+selectcd.log <- as.data.frame(counts_norm_log [c(x),])
+
+
+#colnames 
+colnames(selectcd.log) <- c("BMP1", "BMP2", "VDR1", "VDR2", "LXR1", "LXR2", "FXR1", "FXR2", "PXR1", "PXR2", "PPAR1", "PPAR2", "AHR1", "AHR2")
+
+#LOG FC vs BMP
+selectcd.log["VDR1"] <- selectcd.log["VDR1"]-selectcd.log["BMP1"]
+selectcd.log["VDR2"] <- selectcd.log["VDR2"]-selectcd.log["BMP2"]
+
+selectcd.log["LXR1"] <- selectcd.log["LXR1"]-selectcd.log["BMP1"]
+selectcd.log["LXR2"] <- selectcd.log["LXR2"]-selectcd.log["BMP2"]
+
+selectcd.log["FXR1"] <- selectcd.log["FXR1"]-selectcd.log["BMP1"]
+selectcd.log["FXR2"] <- selectcd.log["FXR2"]-selectcd.log["BMP2"]
+
+selectcd.log["PXR1"] <- selectcd.log["PXR1"]-selectcd.log["BMP1"]
+selectcd.log["PXR2"] <- selectcd.log["PXR2"]-selectcd.log["BMP2"]
+
+selectcd.log["PPAR1"] <- selectcd.log["PPAR1"]-selectcd.log["BMP1"]
+selectcd.log["PPAR2"] <- selectcd.log["PPAR2"]-selectcd.log["BMP2"]
+
+selectcd.log["AHR1"] <- selectcd.log["AHR1"]-selectcd.log["BMP1"]
+selectcd.log["AHR2"] <- selectcd.log["AHR2"]-selectcd.log["BMP2"]
+
+
+#take mean FCvsBMP of each duplicate
+VDR<- (selectcd.log[,"VDR1"]+selectcd.log[,"VDR2"]) /2
+LXR<- (selectcd.log[,"LXR1"]+selectcd.log[,"LXR2"]) /2
+FXR<- (selectcd.log[,"FXR1"]+selectcd.log[,"FXR2"]) /2
+PXR<- (selectcd.log[,"PXR1"]+selectcd.log[,"PXR2"]) /2
+PPAR<- (selectcd.log[,"PPAR1"]+selectcd.log[,"PPAR2"]) /2
+AHR<- (selectcd.log[,"AHR1"]+selectcd.log[,"AHR2"]) /2
+
+
+df <-cbind(VDR, LXR, FXR, PXR, PPAR, AHR)
+row.names(df) <-row.names(selectcd.log)
+# create heatmap using pheatmap
+
+   #function to mirror order of clusters; purely visual
+   callback = function(hc, mat){
+    sv = svd(t(mat))$v[,1]
+    dend = reorder(as.dendrogram(hc), wts = sv)
+    as.hclust(dend)
+} 
+    
+
+paletteLength <- 50
+myColor <- colorRampPalette(c("#2166AC", "white", "#B2182B"))(paletteLength)
+# length(breaks) == length(paletteLength) + 1
+# use floor and ceiling to deal with even/odd length pallettelengths
+myBreaks <- c(seq(min(df), 0, length.out=ceiling(paletteLength/2) + 1), 
+              seq(max(df)/paletteLength, max(df), length.out=floor(paletteLength/2)))
+
+hm <- pheatmap(mat = df, cluster_cols = TRUE, length.out = 99, cluster_rows = FALSE, cellheight= 14, cellwidth = 23, color =myColor,callback =callback, breaks = myBreaks,treeheight_col = 15,  main = name, filename = paste0(name,version,".pdf")   , gaps_row = gaps)
+
+
+#------------------------glucose absorption-----------------------------------------------
+#https://www.ncbi.nlm.nih.gov/pmc/articles/PMC8308647/
+#https://www.ncbi.nlm.nih.gov/pmc/articles/PMC9368955/
+
+x <- c("SLC5A1", "SLC2A1", "SLC2A2", "SLC2A3", "SLC2A4", "SLC2A5", "SLC2A6", "SLC2A8", "SLC2A9",  "SLC2A10",  "SLC2A11", "SLC2A12", "INSR")
+gaps<- NULL
+name <-'Glucose_absorption'
+
+
+selectcd.log <- as.data.frame(counts_norm_log [c(x),])
+
+#colnames 
+colnames(selectcd.log) <- c("BMP1", "BMP2", "VDR1", "VDR2", "LXR1", "LXR2", "FXR1", "FXR2", "PXR1", "PXR2", "PPAR1", "PPAR2", "AHR1", "AHR2")
+
+#LOG FC vs BMP
+selectcd.log["VDR1"] <- selectcd.log["VDR1"]-selectcd.log["BMP1"]
+selectcd.log["VDR2"] <- selectcd.log["VDR2"]-selectcd.log["BMP2"]
+
+selectcd.log["LXR1"] <- selectcd.log["LXR1"]-selectcd.log["BMP1"]
+selectcd.log["LXR2"] <- selectcd.log["LXR2"]-selectcd.log["BMP2"]
+
+selectcd.log["FXR1"] <- selectcd.log["FXR1"]-selectcd.log["BMP1"]
+selectcd.log["FXR2"] <- selectcd.log["FXR2"]-selectcd.log["BMP2"]
+
+selectcd.log["PXR1"] <- selectcd.log["PXR1"]-selectcd.log["BMP1"]
+selectcd.log["PXR2"] <- selectcd.log["PXR2"]-selectcd.log["BMP2"]
+
+selectcd.log["PPAR1"] <- selectcd.log["PPAR1"]-selectcd.log["BMP1"]
+selectcd.log["PPAR2"] <- selectcd.log["PPAR2"]-selectcd.log["BMP2"]
+
+selectcd.log["AHR1"] <- selectcd.log["AHR1"]-selectcd.log["BMP1"]
+selectcd.log["AHR2"] <- selectcd.log["AHR2"]-selectcd.log["BMP2"]
+
+
+#take mean FCvsBMP of each duplicate
+VDR<- (selectcd.log[,"VDR1"]+selectcd.log[,"VDR2"]) /2
+LXR<- (selectcd.log[,"LXR1"]+selectcd.log[,"LXR2"]) /2
+FXR<- (selectcd.log[,"FXR1"]+selectcd.log[,"FXR2"]) /2
+PXR<- (selectcd.log[,"PXR1"]+selectcd.log[,"PXR2"]) /2
+PPAR<- (selectcd.log[,"PPAR1"]+selectcd.log[,"PPAR2"]) /2
+AHR<- (selectcd.log[,"AHR1"]+selectcd.log[,"AHR2"]) /2
+
+
+df <-cbind(VDR, LXR, FXR, PXR, PPAR, AHR)
+row.names(df) <-row.names(selectcd.log)
+# create heatmap using pheatmap
+
+   #function to mirror order of clusters; purely visual
+   callback = function(hc, mat){
+    sv = svd(t(mat))$v[,1]
+    dend = reorder(as.dendrogram(hc), wts = sv)
+    as.hclust(dend)
+} 
+    
+
+paletteLength <- 50
+myColor <- colorRampPalette(c("#2166AC", "white", "#B2182B"))(paletteLength)
+# length(breaks) == length(paletteLength) + 1
+# use floor and ceiling to deal with even/odd length pallettelengths
+myBreaks <- c(seq(min(df), 0, length.out=ceiling(paletteLength/2) + 1), 
+              seq(max(df)/paletteLength, max(df), length.out=floor(paletteLength/2)))
+
+hm <- pheatmap(mat = df, cluster_cols = TRUE, length.out = 99, cluster_rows = FALSE, cellheight= 14, cellwidth = 23, color =myColor,callback =callback, breaks = myBreaks,treeheight_col = 15,  main = name, filename = paste0(name,version,".pdf")   , gaps_row = gaps)
+
+
+#-----------------------amino acid absorption-----------------------------------
+#https://www.researchgate.net/profile/Stephen-Fairweather-2/publication/329645977_Amino_Acid_Transport_Across_the_Mammalian_Intestine/links/5c16d4f5299bf139c75e24c8/Amino-Acid-Transport-Across-the-Mammalian-Intestine.pdf
+#https://www.ncbi.nlm.nih.gov/pmc/articles/PMC8754572/
+
+x <- c("SLC3A1","SLC7A1", "SLC7A9","SLC6A19","SLC6A20","SLC36A1","SLC6A6","SLC1A1", "SLC3A2","SLC7A7","SLC43A2","SLC7A8","SLC16A10", "SLC15A1", "SLC15A2")
+gaps<-0
+name <-"Amino_acid_absorption"
+
+
+selectcd.log <- as.data.frame(counts_norm_log [c(x),])
+
+counts_norm_log["SLC7A7",]
+
+#colnames 
+colnames(selectcd.log) <- c("BMP1", "BMP2", "VDR1", "VDR2", "LXR1", "LXR2", "FXR1", "FXR2", "PXR1", "PXR2", "PPAR1", "PPAR2", "AHR1", "AHR2")
+
+#LOG FC vs BMP
+selectcd.log["VDR1"] <- selectcd.log["VDR1"]-selectcd.log["BMP1"]
+selectcd.log["VDR2"] <- selectcd.log["VDR2"]-selectcd.log["BMP2"]
+
+selectcd.log["LXR1"] <- selectcd.log["LXR1"]-selectcd.log["BMP1"]
+selectcd.log["LXR2"] <- selectcd.log["LXR2"]-selectcd.log["BMP2"]
+
+selectcd.log["FXR1"] <- selectcd.log["FXR1"]-selectcd.log["BMP1"]
+selectcd.log["FXR2"] <- selectcd.log["FXR2"]-selectcd.log["BMP2"]
+
+selectcd.log["PXR1"] <- selectcd.log["PXR1"]-selectcd.log["BMP1"]
+selectcd.log["PXR2"] <- selectcd.log["PXR2"]-selectcd.log["BMP2"]
+
+selectcd.log["PPAR1"] <- selectcd.log["PPAR1"]-selectcd.log["BMP1"]
+selectcd.log["PPAR2"] <- selectcd.log["PPAR2"]-selectcd.log["BMP2"]
+
+selectcd.log["AHR1"] <- selectcd.log["AHR1"]-selectcd.log["BMP1"]
+selectcd.log["AHR2"] <- selectcd.log["AHR2"]-selectcd.log["BMP2"]
+
+
+#take mean FCvsBMP of each duplicate
+VDR<- (selectcd.log[,"VDR1"]+selectcd.log[,"VDR2"]) /2
+LXR<- (selectcd.log[,"LXR1"]+selectcd.log[,"LXR2"]) /2
+FXR<- (selectcd.log[,"FXR1"]+selectcd.log[,"FXR2"]) /2
+PXR<- (selectcd.log[,"PXR1"]+selectcd.log[,"PXR2"]) /2
+PPAR<- (selectcd.log[,"PPAR1"]+selectcd.log[,"PPAR2"]) /2
+AHR<- (selectcd.log[,"AHR1"]+selectcd.log[,"AHR2"]) /2
+
+
+df <-cbind(VDR, LXR, FXR, PXR, PPAR, AHR)
+row.names(df) <-row.names(selectcd.log)
+# create heatmap using pheatmap
+
+   #function to mirror order of clusters; purely visual
+   callback = function(hc, mat){
+    sv = svd(t(mat))$v[,1]
+    dend = reorder(as.dendrogram(hc), wts = sv)
+    as.hclust(dend)
+   }    
+
+paletteLength <- 50
+myColor <- colorRampPalette(c("#2166AC", "white", "#B2182B"))(paletteLength)
+# length(breaks) == length(paletteLength) + 1
+# use floor and ceiling to deal with even/odd length pallettelengths
+myBreaks <- c(seq(min(df), 0, length.out=ceiling(paletteLength/2) + 1), 
+              seq(max(df)/paletteLength, max(df), length.out=floor(paletteLength/2)))
+
+hm <- pheatmap(mat = df, cluster_cols = TRUE, length.out = 99, cluster_rows = FALSE, cellheight= 14, cellwidth = 23, color =myColor,callback =callback, breaks = myBreaks,treeheight_col = 15,  main = name, filename = paste0(name,version,".pdf")   , gaps_row = gaps)
+```
