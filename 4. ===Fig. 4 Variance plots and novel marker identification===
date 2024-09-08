@@ -1,0 +1,624 @@
+===Fig. 4 Variance plots and novel marker identification===
+
+```{r}
+library(DESeq2)
+library(pheatmap)
+library(ggplot2)
+library(tidyr)
+library(clusterProfiler)
+library(org.Hs.eg.db)
+library(cluster)
+library(factoextra)
+library(usefun)
+library(patchwork)
+
+
+
+#translation vector
+COMPs <- c("Calcitriol","Clofibricacid", "FICZ", "GW3965", "GW4064", "SR12813")
+NRs <- c("VDR","PPAR","AHR", "LXR", "FXR", "PXR")
+TV <- as.data.frame(cbind(COMPs, NRs))
+
+#data
+countdata <- read.csv("J:/NR project/NR R analysis for paper/N39_JBJPFYY_bulkRNAseq_NR_countdata.csv", row.names = 1)
+coldata <- read.csv("J:/NR project/NR R analysis for paper/N39_JBJPFYY_bulkRNAseq_NR_coldata.csv")
+
+
+#converting to DDS object, filter out genes <10 transcripts across 22 cols
+
+DESeq.ds <- DESeqDataSetFromMatrix(countData = countdata,
+colData = coldata,
+design = ~ Condition)
+
+dds <- DESeq.ds[rowSums(assay(DESeq.ds)) > 10,]
+
+
+
+#DESEQ normalisation
+dds <- estimateSizeFactors(dds) # calculate SFs, add them to object
+counts_norm <- counts(dds, normalized=TRUE)
+rownames(counts_norm) <- gsub("__chr.+", "", rownames(counts_norm)) #removes __chrxx
+#counts_norm <- counts_norm+1
+
+#check the effect of normalisation
+par(mfrow = c(1,3))
+boxplot(log2(countdata), main = 'just countdata')
+boxplot(log2(counts(dds)), main = 'countdata after rowsum 10 filter')
+boxplot(log2(counts_norm), main = 'countdata after dds norm')
+
+#dispersion estimates
+dds <- estimateDispersions(dds)
+dispersion <- plotDispEsts(dds)
+
+#vsd 
+vsd <- vst(dds, blind = TRUE)
+colnames(vsd) <- c("Control_1"          , "Control_2"        ,    "VDR_1"     ,"VDR_2"    ,  "LXR_1"    ,     "LXR_2"    ,    "FXR_1"    ,     "FXR_2"      ,  
+ "PXR_1"    ,    "PXR_2"     ,   "PPAR_1", "PPAR_2" ,"AHRa1"     ,      "AHR_2"      )  
+
+```
+
+---Marker genes---
+```{r}
+#load all DESEQ2 results
+
+for (i in COMPs) {
+condition = i
+#load in data to use
+assign(paste0(i),   
+  read.csv(paste(condition,"_res.csv ", sep=""), row.names=1))
+}
+
+#Take only genes that are upregulated
+
+FICZ <- FICZ[FICZ$log2FoldChange > 1,]
+GW3965 <- GW3965[GW3965$log2FoldChange > 1,]
+GW4064 <- GW4064[GW4064$log2FoldChange > 1,]
+Calcitriol <- Calcitriol[Calcitriol$log2FoldChange > 1,]
+Clofibricacid <- Clofibricacid[Clofibricacid$log2FoldChange > 1,]
+SR12813 <- SR12813[SR12813$log2FoldChange > 1,]
+
+list.data <- list(FICZ,GW3965,GW4064,SR12813,Calcitriol,Clofibricacid)
+
+#get genes that are only expressed in one of the conditions
+#uniqueDEgenes <- Reduce(outersect, lapply(list.data, rownames))
+
+uniqueDEgenes <- rbind(FICZ, GW3965, GW4064, Calcitriol, Clofibricacid, SR12813)
+
+#subset norm counts data
+rownames(counts_norm) <- gsub("__chr.+", "", rownames(counts_norm)) #removes __chrxx
+temp<-as.data.frame(subset(counts_norm, rownames(counts_norm) %in% rownames(uniqueDEgenes)))
+#length(uniqueDEgenes) sanity check: resultign dataframe should have equal rows to amount of unique genes
+
+#average the columns
+df <- as.data.frame((temp[1] + temp[2]) /2)
+colnames(df) <- "BMP"
+df["Calcitriol"] <- (temp[3] + temp[4]) /2
+df["GW3965"] <- (temp[5] + temp[6]) /2
+df["GW4064"] <- (temp[7] + temp[8]) /2
+df["SR12813"] <- (temp[9] + temp[10]) /2
+df["Clofibricacid"] <- (temp[11] + temp[12]) /2
+df["FICZ"] <- (temp[13] + temp[14]) /2
+
+#Now we have a dataframe with all genes that were uniquely differentially expressed in only one of the tested NR conditions
+
+#x <- df[df$Calcitriol >= 4* rowMeans(df[,c(1,3:10),]),]
+
+#prepare for loop by making df to store results and by removing the inhibitor from the TV
+figuredf <-as.data.frame(df["FABP1",])
+#translation vector
+COMPs <- c("Calcitriol","Clofibricacid", "FICZ", "GW3965", "GW4064", "SR12813")
+NRs <- c("VDR","PPAR","AHR", "LXR", "FXR", "PXR")
+TV <- as.data.frame(cbind(COMPs, NRs))
+
+
+#manual change the NR condition and run this loop for all conditions individually. Change i < "" and df."" <-z
+i <- "Calcitriol"
+tempdf<- df[, -which(names(df) == i)]
+z <- df[df[i] >= 2* tempdf[1] & df[i] >= 2* tempdf[2] & df[i] >= 2* tempdf[3] & df[i] >= 2* tempdf[4] & df[i] >= 2* tempdf[5] 
+        & df[i] >= 2* tempdf[6] ,]
+z <- z[order(z[,i], decreasing = T),]
+df.Calcitriol <- z       
+
+
+i <- "Clofibricacid"
+tempdf<- df[, -which(names(df) == i)]
+z <- df[df[i] >= 2* tempdf[1] & df[i] >= 2* tempdf[2] & df[i] >= 2* tempdf[3] & df[i] >= 2* tempdf[4] & df[i] >= 2* tempdf[5] 
+        & df[i] >= 2* tempdf[6] ,]
+z <- z[order(z[,i], decreasing = T),]
+df.Clofibricacid <- z       
+
+
+i <- "FICZ"
+tempdf<- df[, -which(names(df) == i)]
+z <- df[df[i] >= 2* tempdf[1] & df[i] >= 2* tempdf[2] & df[i] >= 2* tempdf[3] & df[i] >= 2* tempdf[4] & df[i] >= 2* tempdf[5] 
+        & df[i] >= 2* tempdf[6] ,]
+z <- z[order(z[,i], decreasing = T),]
+df.FICZ <- z       
+
+
+i <- "GW3965"
+tempdf<- df[, -which(names(df) == i)]
+z <- df[df[i] >= 2* tempdf[1] & df[i] >= 2* tempdf[2] & df[i] >= 2* tempdf[3] & df[i] >= 2* tempdf[4] & df[i] >= 2* tempdf[5] 
+        & df[i] >= 2* tempdf[6] ,]
+z <- z[order(z[,i], decreasing = T),]
+df.GW3965 <- z     
+
+
+i <- "GW4064"
+tempdf<- df[, -which(names(df) == i)]
+z <- df[df[i] >= 2* tempdf[1] & df[i] >= 2* tempdf[2] & df[i] >= 2* tempdf[3] & df[i] >= 2* tempdf[4] & df[i] >= 2* tempdf[5] 
+        & df[i] >= 2* tempdf[6] ,]
+z <- z[order(z[,i], decreasing = T),]
+df.GW4064 <- z     
+
+
+i <- "SR12813"
+tempdf<- df[, -which(names(df) == i)]
+z <- df[df[i] >= 2* tempdf[1] & df[i] >= 2* tempdf[2] & df[i] >= 2* tempdf[3] & df[i] >= 2* tempdf[4] & df[i] >= 2* tempdf[5] 
+        & df[i] >= 2* tempdf[6] ,]
+z <- z[order(z[,i], decreasing = T),]
+df.SR12813 <- z     
+
+```
+
+
+---marker gene image (later edited with illustrator to add colour and to change column order)---
+
+```{r}
+#long table
+df.Calcitriol <- df.Calcitriol[1:15,]
+df.Calcitriol$Gene <- rownames(df.Calcitriol)
+df2 <- pivot_longer(df.Calcitriol, -Gene, names_to="sample", values_to="expression")
+# transpose of dataframe
+transpose <- t(df2)
+# converting the result to dataframe
+transpose <- as.data.frame(transpose)
+# calculating reverse of dataframe
+rev_data_frame <- rev(transpose)
+# transpose of reverse dataframe
+rev_data_frame <- t(rev_data_frame)
+# converting the result to dataframe
+df2 <- as.data.frame(rev_data_frame)
+df2$expression <- as.numeric(df2$expression) #make sure integers are continous
+
+
+df2$sample <- factor(df2$sample, levels = c("BMP", "Calcitriol","Clofibricacid", "FICZ", "GW3965", "GW4064", "SR12813"))
+
+
+
+Calcitriol<- ggplot(df2, aes(x =Gene, y = sample)) +
+  geom_point(data=df2,aes(x=Gene, y=sample, size = expression), alpha=.7)+
+  scale_size(range = c(0, 8), breaks = waiver())+
+  scale_color_manual(values=c('#2166AC','#B2182B'))+
+  coord_flip()+
+  theme_bw()+
+  theme(axis.ticks.length=unit(-0.1, "cm"),
+       axis.text.x = element_blank(),
+        axis.text.y = element_text(margin=margin(5,5,5,5,"pt")),
+        axis.text = element_text(color = "black"),
+        axis.title.x=element_blank())+
+  labs(size="expression")+
+     scale_x_discrete(limits=df2$Gene, expand = expansion(mult = c(0.1, 0)))
+
+#-----------------------------------
+#long table
+df.Clofibricacid <- df.Clofibricacid[!(row.names(df.Clofibricacid) %in% "MT-TK"),]
+df.Clofibricacid$Gene <- rownames(df.Clofibricacid)
+df2 <- pivot_longer(df.Clofibricacid, -Gene, names_to="sample", values_to="expression")
+# transpose of dataframe
+transpose <- t(df2)
+# converting the result to dataframe
+transpose <- as.data.frame(transpose)
+# calculating reverse of dataframe
+rev_data_frame <- rev(transpose)
+# transpose of reverse dataframe
+rev_data_frame <- t(rev_data_frame)
+# converting the result to dataframe
+df2 <- as.data.frame(rev_data_frame)
+df2$expression <- as.numeric(df2$expression) #make sure integers are continous
+
+
+df2$sample <- factor(df2$sample, levels = c("BMP", "Calcitriol","Clofibricacid", "FICZ", "GW3965", "GW4064", "SR12813"))
+
+
+
+Clofibricacid<- ggplot(df2, aes(x =Gene, y = sample)) +
+  geom_point(data=df2,aes(x=Gene, y=sample, size = expression), alpha=.7)+
+  scale_size(range = c(0, 8), breaks = waiver())+
+  scale_color_manual(values=c('#2166AC','#B2182B'))+
+  coord_flip()+
+  theme_bw()+
+  theme(axis.ticks.length=unit(-0.1, "cm"),
+        axis.text.x = element_blank(),
+        axis.text.y = element_text(margin=margin(5,5,5,5,"pt")),
+        axis.text = element_text(color = "black"),
+        axis.title.x=element_blank())+
+  labs(size="expression")+
+    scale_x_discrete(limits=df2$Gene, expand = expansion(mult = c(0.1, 0)))
+
+
+#------------------------------------------
+#long table
+df.FICZ$Gene <- rownames(df.FICZ)
+df2 <- pivot_longer(df.FICZ, -Gene, names_to="sample", values_to="expression")
+# transpose of dataframe
+transpose <- t(df2)
+# converting the result to dataframe
+transpose <- as.data.frame(transpose)
+# calculating reverse of dataframe
+rev_data_frame <- rev(transpose)
+# transpose of reverse dataframe
+rev_data_frame <- t(rev_data_frame)
+# converting the result to dataframe
+df2 <- as.data.frame(rev_data_frame)
+df2$expression <- as.numeric(df2$expression) #make sure integers are continous
+
+
+df2$sample <- factor(df2$sample, levels = c("BMP", "Calcitriol","Clofibricacid", "FICZ", "GW3965", "GW4064", "SR12813"))
+
+
+
+FICZ<- ggplot(df2, aes(x =Gene, y = sample)) +
+  geom_point(data=df2,aes(x=Gene, y=sample, size = expression), alpha=.7)+
+  scale_size(range = c(0, 8), breaks = waiver())+
+  scale_color_manual(values=c('#2166AC','#B2182B'))+
+  coord_flip()+
+  theme_bw()+
+  theme(axis.ticks.length=unit(-0.1, "cm"),
+        axis.text.x = element_blank(),
+        axis.text.y = element_text(margin=margin(5,5,5,5,"pt")),
+        axis.text = element_text(color = "black"),
+        axis.title.x=element_blank())+
+  labs(size="expression")+
+     scale_x_discrete(limits=df2$Gene, expand = expansion(mult = c(0.1, 0)))
+
+#------------------------------------
+#long table
+df.GW3965$Gene <- rownames(df.GW3965)
+df2 <- pivot_longer(df.GW3965, -Gene, names_to="sample", values_to="expression")
+# transpose of dataframe
+transpose <- t(df2)
+# converting the result to dataframe
+transpose <- as.data.frame(transpose)
+# calculating reverse of dataframe
+rev_data_frame <- rev(transpose)
+# transpose of reverse dataframe
+rev_data_frame <- t(rev_data_frame)
+# converting the result to dataframe
+df2 <- as.data.frame(rev_data_frame)
+df2$expression <- as.numeric(df2$expression) #make sure integers are continous
+
+
+df2$sample <- factor(df2$sample, levels = c("BMP", "Calcitriol","Clofibricacid", "FICZ", "GW3965", "GW4064", "SR12813"))
+
+
+
+GW3965<- ggplot(df2, aes(x =Gene, y = sample)) +
+  geom_point(data=df2,aes(x=Gene, y=sample, size = expression), alpha=.7)+
+  scale_size(range = c(0, 8), breaks = waiver())+
+  scale_color_manual(values=c('#2166AC','#B2182B'))+
+  coord_flip()+
+  theme_bw()+
+  theme(axis.ticks.length=unit(-0.1, "cm"),
+        axis.text.x = element_blank(),
+        axis.text.y = element_text(margin=margin(5,5,5,5,"pt")),
+        axis.text = element_text(color = "black"),
+        axis.title.x=element_blank())+
+  labs(size="expression")+
+    scale_x_discrete(limits=df2$Gene, expand = expansion(mult = c(0.1, 0)))
+
+
+#--------------------------------------------------
+
+#long table
+df.GW4064 <- df.GW4064[1:15,]
+df.GW4064$Gene <- rownames(df.GW4064)
+df2 <- pivot_longer(df.GW4064, -Gene, names_to="sample", values_to="expression")
+# transpose of dataframe
+transpose <- t(df2)
+# converting the result to dataframe
+transpose <- as.data.frame(transpose)
+# calculating reverse of dataframe
+rev_data_frame <- rev(transpose)
+# transpose of reverse dataframe
+rev_data_frame <- t(rev_data_frame)
+# converting the result to dataframe
+df2 <- as.data.frame(rev_data_frame)
+df2$expression <- as.numeric(df2$expression) #make sure integers are continous
+
+
+df2$sample <- factor(df2$sample, levels = c("BMP", "Calcitriol","Clofibricacid", "FICZ", "GW3965", "GW4064", "SR12813"))
+
+
+
+GW4064<- ggplot(df2, aes(x =Gene, y = sample)) +
+  geom_point(data=df2,aes(x=Gene, y=sample, size = expression), alpha=.7)+
+  scale_size(range = c(0, 20), breaks = waiver())+
+  scale_color_manual(values=c('#2166AC','#B2182B'))+
+  coord_flip()+
+  theme_bw()+
+  theme(axis.ticks.length=unit(-0.1, "cm"),
+        axis.text.x = element_blank(),
+        axis.text.y = element_text(margin=margin(5,5,5,5,"pt")),
+        axis.text = element_text(color = "black"),
+        axis.title.x=element_blank())+
+  labs(size="expression")+
+     scale_x_discrete(limits=df2$Gene, expand = expansion(mult = c(0.1, 0.325)))
+
+#--------------------------------------------------
+
+#long table
+df.SR12813$Gene <- rownames(df.SR12813)
+df2 <- pivot_longer(df.SR12813, -Gene, names_to="sample", values_to="expression")
+# transpose of dataframe
+transpose <- t(df2)
+# converting the result to dataframe
+transpose <- as.data.frame(transpose)
+# calculating reverse of dataframe
+rev_data_frame <- rev(transpose)
+# transpose of reverse dataframe
+rev_data_frame <- t(rev_data_frame)
+# converting the result to dataframe
+df2 <- as.data.frame(rev_data_frame)
+df2$expression <- as.numeric(df2$expression) #make sure integers are continous
+
+
+df2$sample <- factor(df2$sample, levels = c("BMP", "Calcitriol","Clofibricacid", "FICZ", "GW3965", "GW4064", "SR12813"))
+
+
+
+SR12813<- ggplot(df2, aes(x =Gene, y = sample)) +
+  geom_point(data=df2,aes(x=Gene, y=sample, size = expression), alpha=.7)+
+  scale_size(range = c(0, 8), breaks = waiver())+
+  scale_color_manual(values=c('#2166AC','#B2182B'))+
+  coord_flip()+
+  theme_bw()+
+  theme(axis.ticks.length=unit(-0.1, "cm"),
+        axis.text.x = element_text(margin=margin(5,5,0,5,"pt"),angle = 45, hjust = 1),
+        axis.text.y = element_text(margin=margin(5,5,5,5,"pt")),
+        axis.text = element_text(color = "black"),
+        axis.title.x=element_blank())+
+  labs(size="expression")+
+    scale_x_discrete(limits=df2$Gene, expand = expansion(mult = c(0.1, 0)))
+
+
+
+
+
+
+
+
+ggsave("Markersv3.pdf",
+Calcitriol / Clofibricacid / FICZ / GW3965 / GW4064 / SR12813 + plot_layout(ncol = 1, nrow = 8, heights = c(8,6.5,6.5,6,7,5)),
+units = "px",
+width = 2000,
+height = 5500
+
+)
+```
+
+
+---Top variable genes analysis---
+
+Variable gene heatmap
+```{r}
+
+# length(breaks) == length(paletteLength) + 1
+# use floor and ceiling to deal with even/odd length pallettelengths
+
+
+variable_gene_heatmap <- function (vsd.obj, num_genes = 750, annotation, title = "") {
+    # get the stabilized counts from the vsd object
+  stabilized_counts <- assay(vsd.obj)
+  # calculate the variances by row(gene) to find out which genes are the most variable across the samples.
+  row_variances <- rowVars(stabilized_counts)
+  # get the top most variable genes
+  top_variable_genes <- stabilized_counts[order(row_variances, decreasing=T)[1:num_genes],]
+  # subtract out the means from each row, leaving the variances for each gene
+  top_variable_genes <- top_variable_genes - rowMeans(top_variable_genes, na.rm=T)
+  # reconstruct colData without sizeFactors for heatmap labeling
+  coldata <- as.data.frame(vsd.obj@colData)
+  coldata$sizeFactor <- NULL
+    # Ramp the color in order to get the scale.
+  paletteLength <- 50
+  myColor <- colorRampPalette(c("#2166AC", "white", "#B2182B"))(paletteLength)
+  myBreaks <- c(seq(min(top_variable_genes), 0, length.out=ceiling(paletteLength/2) + 1), 
+              seq(max(top_variable_genes)/paletteLength, max(top_variable_genes), length.out=floor(paletteLength/2)))
+  # draw heatmap using pheatmap
+  pheatmap::pheatmap(top_variable_genes, color = myColor, clustering_distance_cols = "correlation",
+ breaks = myBreaks, annotation_col = coldata, fontsize_col = 8, fontsize_row = 750/num_genes, border_color = NA, main = title, cutree_rows = 14, cutree_cols = 5)
+}
+
+pdf(file="variable_gene_heatmap_5clusterstop750withnames_cuttree14.pdf")
+hm<-variable_gene_heatmap(vsd, num_genes = 750, annotation = annotation)
+dev.off()
+
+```
+
+---variance plots---
+
+```{r}
+#elbow to determine number of clusters, run hm first to create the hm object (see chunk below)
+top750genes <-hm$tree_row
+top750genes <-top750genes$labels
+top750genes <- gsub("__chr.+", "", top750genes)
+counts_norm <-as.data.frame(counts_norm)
+countstop750 <- counts_norm[rownames(counts_norm) %in% top750genes,]
+
+t.countstop750 <- as.data.frame(t(countstop750))
+
+pdf(file="elbowplottop750(byrowforgenesclusters).pdf", height =4)
+fviz_nbclust(t.countstop750, kmeans, nstart = 10, method = "wss")
+dev.off()
+```
+
+To get a list of top the variable genes and save individually, then do GO on them
+```{r}
+
+genescheck <- as.data.frame(sort(cutree(hm$tree_row, k=14)))
+
+clusters<-as.data.frame(cutree(hm$tree_row, k=14))
+rownames(clusters) <- gsub("__chr.+", "", rownames(clusters)) #removes __chrxx
+
+listofclusters<-split(clusters,clusters$`cutree(hm$tree_row, k = 14)`, sep = ',')
+
+num <-0
+for (i in listofclusters){
+  num <- num + 1
+  genescluster <-rownames(i)
+  name <- paste('clustergenes', num, 'csv', sep = '.')
+  write.csv(genescluster, name)
+}
+
+
+#renaming and combining the appropriate cluster of genes
+ahr_ <- read.csv("clustergenes.8.csv")
+ppar_ <- read.csv("clustergenes.12.csv")
+ahr_ppar <- rbind(ahr_,ppar_)
+write.csv(ahr_ppar, "ahr_ppar.csv")
+
+fxr_1 <- read.csv("clustergenes.9.csv")
+fxr_2 <- read.csv("clustergenes.13.csv")
+fxr_ <- rbind(fxr_1,fxr_2)
+write.csv(fxr_, "fxr.csv")
+
+vdr_ <- read.csv("clustergenes.11.csv")
+write.csv(vdr_, "vdr.csv")
+
+pxr_lxr <- read.csv("clustergenes.14.csv")
+write.csv(pxr_lxr, "pxr_lxr.csv")
+
+
+
+
+
+#load data
+geneList <- read.csv("ahr_ppar.csv")
+geneList <- geneList$x
+#GO classification
+GOres <-  enrichGO(gene     = geneList,
+               OrgDb    = org.Hs.eg.db,
+               keyType  = "SYMBOL",
+               ont      = "BP", #BP = biological pathways
+               pAdjustMethod = "bonferroni")
+#make plots
+GOres2<- simplify(GOres, cutoff=0.7, by="p.adjust", select_fun=min)
+  GOplot <- dotplot(GOres2, showCategory=5, font.size=11, label_format = 40) + ggtitle(paste0("Enriched GO terms")) + scale_color_viridis_c(name = 'p.adjust', direction = -1) +  theme(plot.title = element_text(hjust = 0.9))
+pdf(file="ahr_ppar.pdf")
+GOplot
+dev.off()
+#Take data for combined figure
+GO.df1 <- GOplot$data[c("Description","GeneRatio","p.adjust", "ID", "Count" )]
+GO.df1$Cluster <- "AHR,PPAR"
+
+
+      geneList <- read.csv("fxr.csv")
+      geneList <- geneList$x
+      #GO classification
+      GOres <-  enrichGO(gene     = geneList,
+                     OrgDb    = org.Hs.eg.db,
+                     keyType  = "SYMBOL",
+                     ont      = "BP", #BP = biological pathways
+                     pAdjustMethod = "bonferroni")
+      #make plots
+      GOres2<- simplify(GOres, cutoff=0.7, by="p.adjust", select_fun=min)
+        GOplot <- dotplot(GOres2, showCategory=5, font.size=11, label_format = 40) + ggtitle(paste0("Enriched GO terms")) + scale_color_viridis_c(name = 'p.adjust', direction = -1) +  theme(plot.title = element_text(hjust = 0.9))
+      pdf(file="fxr.pdf")
+      GOplot
+      dev.off()
+      #Take data for combined figure
+      GO.df2 <- GOplot$data[c("Description","GeneRatio","p.adjust", "ID", "Count" )]
+      GO.df2$Cluster <- "FXR"
+      
+
+            
+                    
+                                  geneList <- read.csv("pxr_lxr.csv")
+                              geneList <- geneList$x
+                              #GO classification
+                              GOres <-  enrichGO(gene     = geneList,
+                                             OrgDb    = org.Hs.eg.db,
+                                             keyType  = "SYMBOL",
+                                             ont      = "BP", #BP = biological pathways
+                                             pAdjustMethod = "bonferroni")
+                              #make plots
+                              GOres2<- simplify(GOres, cutoff=0.7, by="p.adjust", select_fun=min)
+                                GOplot <- dotplot(GOres2, showCategory=5, font.size=11, label_format = 40) + ggtitle(paste0("Enriched GO terms")) + scale_color_viridis_c(name = 'p.adjust', direction = -1) +  theme(plot.title = element_text(hjust = 0.9))
+                              pdf(file="PXR,LXR.pdf")
+                              GOplot
+                              dev.off()
+                              #Take data for combined figure
+                              GO.df3 <- GOplot$data[c("Description","GeneRatio","p.adjust", "ID", "Count" )]
+                              GO.df3$Cluster <- "PXR,LXR"
+                
+                                                geneList <- read.csv("vdr.csv")
+                                            geneList <- geneList$x
+                                            #GO classification
+                                            GOres <-  enrichGO(gene     = geneList,
+                                                           OrgDb    = org.Hs.eg.db,
+                                                           keyType  = "SYMBOL",
+                                                           ont      = "BP", #BP = biological pathways
+                                                           pAdjustMethod = "bonferroni")
+                                            #make plots
+                                            GOres2<- simplify(GOres, cutoff=0.7, by="p.adjust", select_fun=min)
+                                              GOplot <- dotplot(GOres2, showCategory=5, font.size=11, label_format = 40) + ggtitle(paste0("Enriched GO terms")) + scale_color_viridis_c(name = 'p.adjust', direction = -1) +  theme(plot.title = element_text(hjust = 0.9))
+                                            pdf(file="VDR.pdf")
+                                            GOplot
+                                            dev.off()
+                                            #Take data for combined figure
+                                            GO.df4 <- GOplot$data[c("Description","GeneRatio","p.adjust", "ID", "Count" )]
+                                            GO.df4$Cluster <- "VDR"
+                                            
+                                        
+GO.dfvector1 <- rbind(GO.df1,GO.df2)
+rownames(GO.dfvector1) <- NULL
+GO.dfvector2 <- rbind(GO.df3,GO.df4)
+rownames(GO.dfvector2) <- NULL
+GOfull.df <- rbind(GO.dfvector1,GO.dfvector2)
+GOfull.df$Cluster <- as.factor(GOfull.df$Cluster)
+
+#save final plot
+
+ggsave("GOsummary_variableClusters.pdf",
+ggplot(GOfull.df, aes(x = Description, y = Cluster)) +
+  geom_point(data=GOfull.df,aes(x=Description, y=Cluster, size = Count, colour = GeneRatio), alpha=.9)+
+  scale_color_continuous(type= "viridis")+
+  scale_x_discrete(limits=rev)+
+  coord_flip()+
+  theme_bw()+
+  theme(axis.ticks.length=unit(-0.1, "cm"),
+        axis.text.x = element_text(margin=margin(5,5,0,5,"pt"),angle = 45, hjust = 1),
+        axis.text.y = element_text(margin=margin(5,5,5,5,"pt")),
+        axis.text = element_text(color = "black"))+
+  xlab("Go processes")+
+  labs(colour = "GeneRatio", size="Gene Count")+
+  guides(size = guide_legend(reverse=T))+
+  guides(colour = guide_legend(reverse=T)),
+units = "px",
+width = 1500,
+height = 1200
+)
+```
+
+---PCA on top 750 variable genes---
+```{r}
+clusterspca<-cutree(hm$tree_col, k=5)
+
+plot_PCA = function (vsd.obj) {
+  pcaData <- plotPCA(vsd.obj,  intgroup = c("Condition"), ntop=750, returnData = T)
+  percentVar <- round(100 * attr(pcaData, "percentVar"))
+  ggplot(pcaData, aes(PC1, PC2, color=Condition)) +
+  ggforce::geom_mark_ellipse(aes(group = clusterspca), color = "darkgrey", n =40, radius = unit(5, "mm"))+
+    geom_point(size=3) +
+    labs(x = paste0("PC1: ",percentVar[1],"% variance"),
+         y = paste0("PC2: ",percentVar[2],"% variance"),
+         title = "PCA of top 750 variable genes") +
+    ggrepel::geom_text_repel(aes(label = colnames(vsd)), color = "black")+
+    theme(legend.position="none")
+}
+
+pdf(file="variable_gene_pcatop750.pdf", width = 7, height = 4)
+plot_PCA(vsd)
+dev.off()
+
+```
