@@ -109,7 +109,7 @@ hm <- pheatmap(mat = df, cluster_cols = TRUE, length.out = 99, cluster_rows = FA
 
 # --------------------------------------------------electrolyte transporter--------------------------------
 #https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4427515/
-#Calcium-Independent Effects in Mouse Intestine and Human Enteroids
+#https://pubmed.ncbi.nlm.nih.gov/33139494/
 
 x <- c("CFTR","SLC26A3", "SLC26A6", "SCNN1A", "SLC9A2","SLC9A3","SLC9A3R1", "SLC9A3R2", "SLC34A2", "SLC34A3", "SLC20A1", "SLC20A2", "SLC17A4","TRPV6", "CALB2", "ATP2B1", "ATP2B4", "SLC7A1", "HFE", "ATP7A", "SLC30A4", "SLC30A5", "SLC30A10", "SLC11A2", "TRPM7")
 gaps <- c(3,8,13,18)
@@ -172,9 +172,10 @@ hm <- pheatmap(mat = df, cluster_cols = TRUE, length.out = 99, cluster_rows = FA
 
 
 # -----------------------------drug metabolism------------------------------
-#source https://www-sciencedirect-com.proxy.library.uu.nl/science/article/pii/S0169409X12003031?via%3Dihub
-#https://pubmed.ncbi.nlm.nih.gov/30253071/, https://www.ncbi.nlm.nih.gov/pmc/articles/PMC6225997/
-#Analysis of 1,25-Dihydroxyvitamin D3 Genomic Action Reveals Calcium-Regulating and 
+#https://pubmed.ncbi.nlm.nih.gov/23041352/
+#https://pubmed.ncbi.nlm.nih.gov/30253071/
+#https://www.ncbi.nlm.nih.gov/pmc/articles/PMC6225997/
+#https://pubmed.ncbi.nlm.nih.gov/33139494/ 
 #https://www.ncbi.nlm.nih.gov/pmc/articles/PMC3777468/ FOR ABCC GENES
 
 x <- c("CYP1A1", "CYP1B1", "CYP2B6", "CYP2C8", "CYP2C9", "CYP2C19", "CYP3A4", "CYP3A5", "FMO4","FMO5", "UGT2B7","UGT2B15","GSTA1","GSTP1", "GSTZ1", "SLC15A1", "SLC22A1", "ABCB1", "ABCG2", "ABCC1", "ABCC2", "ABCC3", "ABCC4", "ABCC5", "ABCC10")
@@ -305,7 +306,7 @@ hm <- pheatmap(mat = df, cluster_cols = TRUE, length.out = 99, cluster_rows = FA
 
 
 #-----------------------amino acid absorption-----------------------------------
-#https://www.researchgate.net/profile/Stephen-Fairweather-2/publication/329645977_Amino_Acid_Transport_Across_the_Mammalian_Intestine/links/5c16d4f5299bf139c75e24c8/Amino-Acid-Transport-Across-the-Mammalian-Intestine.pdf
+#https://pubmed.ncbi.nlm.nih.gov/30549024/
 #https://www.ncbi.nlm.nih.gov/pmc/articles/PMC8754572/
 
 x <- c("SLC3A1","SLC7A1", "SLC7A9","SLC6A19","SLC6A20","SLC36A1","SLC6A6","SLC1A1", "SLC3A2","SLC7A7","SLC43A2","SLC7A8","SLC16A10", "SLC15A1", "SLC15A2")
