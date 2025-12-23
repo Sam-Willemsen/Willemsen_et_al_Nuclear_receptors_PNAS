@@ -21,8 +21,27 @@ TV <- as.data.frame(cbind(COMPs, NRs))
 
 #data (raw counts)
 countdata <- read.csv("J:/NR project/NR R analysis for paper/GSE273646_countdata.csv.gz", row.names = 1)
-coldata <- read.csv("J:/NR project/NR R analysis for paper/N39_JBJPFYY_bulkRNAseq_NR_coldata.csv")
-
+colData <- data.frame(
+  Sample = c(
+    "BMP_a","BMP_b",
+    "Calcitriol_a","Calcitriol_b",
+    "GW3965_a","GW3965_b",
+    "GW4064_a","GW4064_b",
+    "SR12813_a","SR12813_b",
+    "Clofibric acid_a","Clofibric acid_b",
+    "FICZ_a","FICZ_b"
+  ),
+  Condition = c(
+    "BMP","BMP",
+    "Calcitriol","Calcitriol",
+    "GW3965","GW3965",
+    "GW4064","GW4064",
+    "SR12813","SR12813",
+    "Clofibric acid","Clofibric acid",
+    "FICZ","FICZ"
+  ),
+  stringsAsFactors = FALSE
+)
 
 #converting to DDS object, filter out genes <10 transcripts across 22 cols
 
